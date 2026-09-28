@@ -96,6 +96,13 @@ export class Player {
     this.carrying = id;
     if (this.carryMesh) {
       this.model.carry.remove(this.carryMesh);
+      // the carried model's geometry and materials are unique to this pickup
+      this.carryMesh.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (!m.isMesh) return;
+        m.geometry.dispose();
+        (m.material as THREE.Material).dispose();
+      });
       this.carryMesh = null;
     }
     this.carryId = id;
@@ -340,7 +347,7 @@ export class Player {
     } else {
       this.heat = Math.max(0, this.heat - st.coolRate * 0.25 * dt);
     }
-    const wantFire = g.state === 'playing' && !g.structures.placing && (inp.mouseDown || inp.padFire) && !g.hud.pointerOverUi;
+    const wantFire = g.state === 'playing' && !g.structures.placing && (inp.mouseDown || inp.padFire) && (!g.hud.pointerOverUi || inp.usingGamepad);
     if (wantFire && !this.overheated && this.fireCd <= 0 && this.dashT <= 0) {
       this.fire();
     }

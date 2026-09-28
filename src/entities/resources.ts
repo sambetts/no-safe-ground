@@ -88,10 +88,17 @@ export class ResourceSystem {
   init(layout: WorldLayout): void {
     const g = this.game;
     const rng = new Rng(layout.seed ^ 0x1234);
+    // init can run more than once on the same world (title vista, then the first run): drop the old
+    // crate colliders and restore the colliders of nodes mined earlier
+    for (const n of this.nodes) if (n.kind === 'crate' && n.obstacle?.alive) g.grid.remove(n.obstacle);
     this.nodes = [];
     this.nodeIndex.clear();
     for (const o of layout.obstacles) {
       if (o.kind !== 'node') continue;
+      if (!o.alive) {
+        o.alive = true;
+        g.grid.add(o);
+      }
       const r = layout.resources[o.ref];
       const isX = r.kind === 'xenite';
       const total = Math.round((isX ? rng.range(10, 15) : rng.range(15, 22)) * r.scale * g.difficulty.resourceMult);

@@ -278,7 +278,6 @@ export function matriarchModel(): CreatureModel {
   const plate = 0x4a2a3a;
   const bone = 0xd9c7a2;
   p.push(part(sphere(1), chitin, { p: [0, 2.6, -2.4], s: [2.5, 2.1, 3.0], jitter: 0.06, seed: 41, shade: 0.1, rig: [0, 0, 0.5] }));
-  g.push(part(sphere(1), 0xff2d55, { p: [0, 3.4, -2.6], s: [1.5, 1.1, 1.8], rig: [0, 0, 1] }));
   p.push(part(sphere(1), plate, { p: [0, 2.3, 0.6], s: [1.6, 1.3, 1.7], shade: 0.1, seed: 42 }));
   p.push(part(sphere(1), chitin, { p: [0, 2.4, 2.3], s: [1.05, 0.9, 1.1], shade: 0.1, seed: 43 }));
   // crown of spikes
@@ -300,8 +299,19 @@ export function matriarchModel(): CreatureModel {
     const y = 2.6 + Math.floor(i / 3) * 0.28;
     g.push(part(sphere(0), 0xffe14a, { p: [x, y, 3.25], s: 0.12 }));
   }
-  // bioluminescent stripes on the abdomen
-  for (let i = 0; i < 4; i++) g.push(part(box(), 0xff2d55, { p: [0, 4.55 - i * 0.2, -1.3 - i * 0.75], r: [-0.4 - i * 0.15, 0, 0], s: [1.6 - i * 0.2, 0.08, 0.25], rig: [0, 0, 1] }));
+  // bioluminescent spots sitting on the abdomen's surface (same pulse weight as the abdomen so they ride it)
+  const abdomenTop = (x: number, z: number) => 2.6 + 2.1 * Math.sqrt(Math.max(0, 1 - (x / 2.5) ** 2 - ((z + 2.4) / 3.0) ** 2));
+  for (let i = 0; i < 5; i++) {
+    const z = -0.9 - i * 0.78;
+    const r = 0.34 - i * 0.04;
+    g.push(part(sphere(1), 0xff2d55, { p: [0, abdomenTop(0, z) + 0.1, z], s: [r, r * 0.45, r * 1.2], rig: [0, 0, 0.5] }));
+    if (i === 4) continue;
+    for (const sx of [-1, 1]) {
+      const x = sx * (1.05 - i * 0.06);
+      const zz = z - 0.35;
+      g.push(part(sphere(0), 0xff2d55, { p: [x, abdomenTop(x, zz) + 0.1, zz], s: [r * 0.62, r * 0.4, r * 0.62], rig: [0, 0, 0.5] }));
+    }
+  }
   return { body: build(p), glow: build(g) };
 }
 

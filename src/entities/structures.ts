@@ -32,6 +32,13 @@ export interface Structure {
 const env = envMaterial();
 const glow = glowMaterial(1.4, 2.6);
 
+// structure geometry is identical for every instance, so it is built once per kind and shared
+const geoCache = new Map<string, unknown>();
+function cached<T>(key: string, make: () => T): T {
+  if (!geoCache.has(key)) geoCache.set(key, make());
+  return geoCache.get(key) as T;
+}
+
 function buildModel(kind: StructureKind): { group: THREE.Group; head: THREE.Object3D | null } {
   const group = new THREE.Group();
   let head: THREE.Object3D | null = null;
@@ -44,31 +51,31 @@ function buildModel(kind: StructureKind): { group: THREE.Group; head: THREE.Obje
   };
   switch (kind) {
     case 'turret': {
-      add(turretBaseGeo(), env);
+      add(cached('turretBase', turretBaseGeo), env);
       head = new THREE.Group();
-      const hg = turretHeadGeo();
+      const hg = cached('turretHead', turretHeadGeo);
       add(hg.body, env, head);
       add(hg.glow, glow, head, false);
       group.add(head);
       break;
     }
     case 'wall':
-      add(wallGeo(), env);
+      add(cached('wall', wallGeo), env);
       break;
     case 'lamp': {
-      const g = lampGeo();
+      const g = cached('lamp', lampGeo);
       add(g.body, env);
       add(g.glow, glow, group, false);
       break;
     }
     case 'beacon': {
-      const g = beaconGeo();
+      const g = cached('beacon', beaconGeo);
       add(g.body, env);
       head = add(g.glow, glow, group, false);
       break;
     }
     case 'tesla': {
-      const g = teslaGeo();
+      const g = cached('tesla', teslaGeo);
       add(g.body, env);
       head = add(g.glow, glow, group, false);
       break;
@@ -194,7 +201,7 @@ export class StructureSystem {
       const col = this.ghostValid ? 0x5aff8a : 0xff4a4a;
       this.ghostMat.color.setHex(col);
       this.ringMat.color.setHex(col);
-      if (g.input.mousePressed && !g.hud.pointerOverUi) {
+      if (g.input.mousePressed && (!g.hud.pointerOverUi || g.input.usingGamepad)) {
         if (this.ghostValid) this.place(kind, x, z, this.grot);
         else {
           audio.play('uiError', { volume: 0.6 });
@@ -403,13 +410,21 @@ export class StructureSystem {
 
   clear(): void {
     this.cancel();
+    const g = this.game;
     for (const s of this.list) {
-      this.game.renderer.scene.remove(s.group);
+      g.renderer.scene.remove(s.group);
+      if (s.alive) {
+        s.alive = false;
+        s.obstacle.alive = false;
+        g.grid.remove(s.obstacle);
+        g.flowShip.setCostCircle(s.x, s.z, s.obstacle.r, 0);
+      }
       if (s.decal >= 0) {
         this.decals.setAlpha(s.decal, 0);
         this.freeSlots.push(s.decal);
       }
     }
     this.list = [];
+    this.flowDirty = false;
   }
 }

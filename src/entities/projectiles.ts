@@ -255,7 +255,7 @@ export class ProjectileSystem {
     g.hazards.acidPuddle(l.tx, l.tz, l.radius * 0.85, l.kind === 'boss' ? 4 : 3.2, col);
     // spit hurts structures and the ship too
     g.structures.damageRadius(l.tx, l.tz, l.radius, l.dmg * 0.8);
-    if (dist(l.tx, l.tz, g.ship.x, g.ship.z) < 6) g.ship.damage(l.dmg * 0.8, l.tx, l.tz);
+    if (dist(l.tx, l.tz, g.ship.x, g.ship.z) < 6) g.ship.damage((l.dmg / g.difficulty.enemyDmg) * 0.8, l.tx, l.tz);
   }
 
   /** Area damage to creatures (player ordnance). */

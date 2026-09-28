@@ -73,6 +73,8 @@ export class Hud {
   showDamageNumbers = true;
   private objT = 0;
   private lastObjHtml = '';
+  private hudRects: { l: number; t: number; r: number; b: number }[] = [];
+  private hudRectsFrame = -999;
 
   constructor(
     private game: Game,
@@ -381,7 +383,7 @@ export class Hud {
     for (const p of g.layout.parts) {
       const st = g.partState[p.id];
       if (st !== 'field' && st !== 'dropped') continue;
-      const pos = st === 'dropped' ? g.droppedPart! : p;
+      const pos = g.partSpots[p.id];
       const c = '#' + PARTS[p.id].color.toString(16).padStart(6, '0');
       ctx.save();
       ctx.translate(tx(pos.x), tz(pos.z));
@@ -471,7 +473,7 @@ export class Hud {
         cls += ' urgent';
         dd = `${Math.round(dist(p.x, p.z, g.ship.x, g.ship.z))}m`;
       } else {
-        const pos = st === 'dropped' ? g.droppedPart! : part;
+        const pos = g.partSpots[part.id];
         dd = `${Math.round(dist(p.x, p.z, pos.x, pos.z))}m`;
         if (part.id === 'reactor' && st === 'field') label += ' ⚠';
         if (st === 'dropped') label += ' (dropped)';
@@ -638,12 +640,59 @@ export class Hud {
     return m.el;
   }
 
+  private measureHud(): void {
+    this.hudRects.length = 0;
+    for (const sel of ['.hud-tl', '.hud-tc', '.hud-tr', '.hud-bl', '.hud-bc', '.hud-br', '.boss']) {
+      const r = this.root.querySelector(sel)?.getBoundingClientRect();
+      if (r && r.width > 0 && r.height > 0) this.hudRects.push({ l: r.left, t: r.top, r: r.right, b: r.bottom });
+    }
+  }
+
+  private hudHit(x: number, y: number): boolean {
+    return this.hudRects.some((q) => x + 32 > q.l && x - 32 < q.r && y + 24 > q.t && y - 24 < q.b);
+  }
+
+  // Nudges a marker (given by its centre) off any HUD panel, by the smallest move that stays inside the bounds.
+  private avoidHud(x: number, y: number, minX: number, maxX: number, minY: number, maxY: number): [number, number] {
+    const hw = 32;
+    const hh = 24;
+    for (let iter = 0; iter < 4; iter++) {
+      const r = this.hudRects.find((q) => x + hw > q.l && x - hw < q.r && y + hh > q.t && y - hh < q.b);
+      if (!r) break;
+      let bx = x;
+      let by = y;
+      let bestD = Infinity;
+      for (const [cx, cy] of [
+        [x, r.t - hh - 4],
+        [x, r.b + hh + 4],
+        [r.l - hw - 4, y],
+        [r.r + hw + 4, y],
+      ]) {
+        if (cx < minX || cx > maxX || cy < minY || cy > maxY) continue;
+        const dd = Math.abs(cx - x) + Math.abs(cy - y);
+        if (dd < bestD) {
+          bestD = dd;
+          bx = cx;
+          by = cy;
+        }
+      }
+      if (bestD === Infinity) break;
+      x = bx;
+      y = by;
+    }
+    return [x, y];
+  }
+
   private updateMarkers(): void {
     const g = this.game;
     const p = g.player;
     for (const m of this.markerPool) m.used = false;
     const W = window.innerWidth;
     const H = window.innerHeight;
+    if (this.frame - this.hudRectsFrame >= 20) {
+      this.hudRectsFrame = this.frame;
+      this.measureHud();
+    }
     const edgePlaced: { x: number; y: number }[] = [];
     const place = (key: string, x: number, y: number, z: number, color: string, label: string, alwaysShow: boolean) => {
       const d = dist(p.x, p.z, x, z);
@@ -661,7 +710,8 @@ export class Hud {
           elx.innerHTML = html;
           elx.dataset.h = html;
         }
-        elx.style.transform = `translate(${s.x}px, ${s.y}px) translate(-50%, -100%)`;
+        const [ax, ay] = this.avoidHud(s.x, s.y - 24, 40, W - 40, 30, H - 30);
+        elx.style.transform = `translate(${ax}px, ${ay + 24}px) translate(-50%, -100%)`;
       } else {
         // clamp to screen edge along the direction from the screen centre
         let dx = s.x - W / 2;
@@ -675,18 +725,21 @@ export class Hud {
         const k = Math.min((W / 2 - margin) / Math.max(Math.abs(dx), 1e-3), ((H - top - bottom) / 2) / Math.max(Math.abs(dy), 1e-3));
         let ex = W / 2 + dx * k;
         let ey = cy + dy * k;
-        // keep edge markers from stacking on top of each other
         const onSide = Math.abs(ex - W / 2) >= W / 2 - margin - 1;
-        for (let iter = 0; iter < 5; iter++) {
-          let moved = false;
-          for (const q of edgePlaced) {
-            if (Math.abs(q.x - ex) < 60 && Math.abs(q.y - ey) < 38) {
-              if (onSide) ey = q.y + (ey >= q.y ? 40 : -40);
-              else ex = q.x + (ex >= q.x ? 62 : -62);
-              moved = true;
-            }
-          }
-          if (!moved) break;
+        [ex, ey] = this.avoidHud(ex, ey, margin, W - margin, top, H - bottom);
+        // keep edge markers from stacking: take the nearest free slot along the edge (0, +1, -1, +2, -2 … steps)
+        const sx = onSide ? 0 : 62;
+        const sy = onSide ? 40 : 0;
+        for (let i = 0; i < 11; i++) {
+          const n = i % 2 === 1 ? (i + 1) / 2 : -i / 2;
+          const cx = ex + sx * n;
+          const cy = ey + sy * n;
+          if (cx < margin - 1 || cx > W - margin + 1 || cy < top - 1 || cy > H - bottom + 1) continue;
+          if (edgePlaced.some((q) => Math.abs(q.x - cx) < 60 && Math.abs(q.y - cy) < 38)) continue;
+          if (this.hudHit(cx, cy)) continue;
+          ex = cx;
+          ey = cy;
+          break;
         }
         edgePlaced.push({ x: ex, y: ey });
         const ang = Math.atan2(dy, dx) + Math.PI / 2;
@@ -700,7 +753,7 @@ export class Hud {
       for (const part of g.layout.parts) {
         const st = g.partState[part.id];
         if (st !== 'field' && st !== 'dropped') continue;
-        const pos = st === 'dropped' ? g.droppedPart! : part;
+        const pos = g.partSpots[part.id];
         const c = '#' + PARTS[part.id].color.toString(16).padStart(6, '0');
         place(`part-${part.id}`, pos.x, g.terrain.heightAt(pos.x, pos.z) + 3, pos.z, c, PARTS[part.id].short, false);
       }

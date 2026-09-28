@@ -156,8 +156,11 @@ export class Input {
     const btn = (i: number) => !!gp.buttons[i]?.pressed;
     const edge = (i: number) => btn(i) && !this.padPrev[i];
     if (this.padMoveX || this.padMoveY || this.padAimX || this.padAimY) this.usingGamepad = true;
+    const wasFire = this.padFire;
     this.padFire = btn(7) || (gp.buttons[7]?.value ?? 0) > 0.3;
     if (this.padFire) this.usingGamepad = true;
+    // the trigger also acts as a click (e.g. placing structures)
+    if (this.padFire && !wasFire) this.mousePressed = true;
     if (edge(0) || edge(4)) this.pressedSet.add('dash');
     if (edge(0)) this.pressedSet.add('skip');
     if (edge(2)) this.pressedSet.add('interact');
@@ -172,6 +175,7 @@ export class Input {
     if (edge(15)) this.pressedSet.add('build2');
     if (edge(13)) this.pressedSet.add('build3');
     if (edge(14)) this.pressedSet.add('build4');
+    if (edge(3)) this.pressedSet.add('build5');
     for (let i = 0; i < gp.buttons.length; i++) {
       if (edge(i)) this.anyPressed = true;
       this.padPrev[i] = btn(i);

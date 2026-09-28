@@ -23,7 +23,11 @@ export const loadSettings = (): Settings => {
   const def: Settings = { master: 0.8, music: 0.6, sfx: 0.9, quality: 'high', shake: true, damageNumbers: true, hints: true, difficulty: 'survivor' };
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) return { ...def, ...(JSON.parse(raw) as Partial<Settings>) };
+    if (raw) {
+      const s = { ...def, ...(JSON.parse(raw) as Partial<Settings>) };
+      if (!DIFFICULTIES[s.difficulty]) s.difficulty = def.difficulty;
+      return s;
+    }
   } catch {
     /* ignore */
   }
@@ -174,7 +178,7 @@ export class Screens {
     click('btn-help-close', () => this.showHelp(false));
     click('btn-settings', () => this.openSettings(() => this.showTitle(true)));
     click('btn-resume', () => this.game.setPaused(false));
-    click('btn-psettings', () => this.openSettings(() => this.showPause(true)));
+    click('btn-psettings', () => this.openSettings(() => this.game.state === 'paused' && this.showPause(true)));
     click('btn-restart', () => this.game.startRun(this.game.difficulty.id));
     click('btn-quit', () => this.game.toTitle());
     for (const b of document.querySelectorAll('.btn')) b.addEventListener('mouseenter', () => audio.play('uiHover', { volume: 0.5 }));
@@ -198,7 +202,9 @@ export class Screens {
       box.appendChild(el);
     }
     const best = loadBest();
-    const lines = Object.values(best).map((b) => `${DIFFICULTIES[b.difficulty].name}: escaped in ${formatTime(b.time)}`);
+    const lines = Object.values(best)
+      .filter((b) => DIFFICULTIES[b.difficulty] && Number.isFinite(b.time))
+      .map((b) => `${DIFFICULTIES[b.difficulty].name}: escaped in ${formatTime(b.time)}`);
     document.getElementById('best')!.textContent = lines.length ? `Best — ${lines.join(' · ')}` : '';
   }
 
@@ -297,10 +303,19 @@ export class Screens {
     });
     card.querySelector('#s-close')!.addEventListener('click', () => {
       audio.play('uiClick');
-      this.menu(this.settingsEl, false);
-      this.settingsReturn();
+      this.closeSettings();
     });
     this.menu(this.settingsEl, true);
+  }
+
+  get settingsOpen(): boolean {
+    return this.settingsEl.classList.contains('show');
+  }
+
+  closeSettings(): void {
+    if (!this.settingsOpen) return;
+    this.menu(this.settingsEl, false);
+    this.settingsReturn();
   }
 
   apply(): void {

@@ -90,7 +90,8 @@ export class Game {
   secondary: SecondaryId = 'grenade';
   unlockedSecondaries = new Set<SecondaryId>(['grenade']);
   partState: Record<PartId, PartState> = { coil: 'field', cell: 'field', nav: 'field', reactor: 'field' };
-  droppedPart: { x: number; z: number; id: PartId } | null = null;
+  /** Where each part lies this run: its field spot, where it was dropped, or where the Matriarch fell. */
+  partSpots = {} as Record<PartId, { x: number; z: number }>;
   wreckSeen: boolean[] = [];
   wreckLooted: boolean[] = [];
   launching = false;
@@ -101,7 +102,10 @@ export class Game {
   private stateT = 0;
   private respawnT = 0;
   private endT = 0;
+  private endShown = false;
   private endReason = '';
+  /** Set once a run has started on the current world; the next run then generates a fresh one. */
+  private worldPlayed = false;
   private slowmo = 0;
   private titleAngle = 0;
   private windLoop: LoopHandle | null = null;
@@ -164,8 +168,11 @@ export class Game {
     this.env = buildEnvironment(this.layout);
     this.worldRoot.add(this.env.group);
     this.resources = new ResourceSystem(this);
+    this.hazards?.clear(); // stops a running ion-storm loop
     this.hazards = new HazardSystem(this);
     if (this.fx) this.fx.terrain = this.terrain;
+    this.worldPlayed = false;
+    this.resetPartSpots();
     // part objects: floating component with a tall signal beam
     this.partObjects = [];
     for (const p of this.layout.parts) {
@@ -204,6 +211,10 @@ export class Game {
     this.flowShip.compute([{ x: this.ship.x, z: this.ship.z }]);
   }
 
+  private resetPartSpots(): void {
+    for (const p of this.layout.parts) this.partSpots[p.id] = { x: p.x, z: p.z };
+  }
+
   // ------------------------------------------------------------------------------------------------ states
 
   private enterTitle(): void {
@@ -239,6 +250,8 @@ export class Game {
     this.setMusic('title');
     this.hud.fade(0, false, 1.5);
     this.stopLoops();
+    audio.setPaused(false);
+    audio.setMuffled(0);
   }
 
   toTitle(): void {
@@ -254,14 +267,18 @@ export class Game {
     this.hud.fade(1, false, 0.45);
     this.screens.hideAll();
     setTimeout(() => {
-      // fresh world for every run after the first (the title vista world is used for the first run)
-      if (this.state !== 'title') this.buildWorld(Math.floor(Math.random() * 1e9));
+      // the title vista world is reused for the first run; any world that has been played is replaced
+      if (this.worldPlayed) this.buildWorld(Math.floor(Math.random() * 1e9));
       this.resetRun(diff);
       this.enterIntro();
     }, 480);
   }
 
   private resetRun(diff: DifficultyId): void {
+    this.worldPlayed = true;
+    audio.setPaused(false);
+    audio.setMuffled(0);
+    this.renderer.rig.targetDistance = 30;
     this.difficulty = DIFFICULTIES[diff];
     this.levels = emptyLevels();
     this.stats = computeStats(this.levels);
@@ -271,7 +288,7 @@ export class Game {
     this.secondary = 'grenade';
     this.unlockedSecondaries = new Set(['grenade']);
     this.partState = { coil: 'field', cell: 'field', nav: 'field', reactor: 'field' };
-    this.droppedPart = null;
+    this.resetPartSpots();
     this.launching = false;
     this.launchRemaining = SHIP.launchTime;
     this.launchMilestones.clear();
@@ -299,7 +316,7 @@ export class Game {
     this.recomputeShipFlow();
     for (const po of this.partObjects) {
       po.group.visible = po.id !== 'reactor';
-      const p = this.layout.parts.find((q) => q.id === po.id)!;
+      const p = this.partSpots[po.id];
       po.group.position.set(p.x, this.terrain.heightAt(p.x, p.z), p.z);
     }
     this.wreckSeen = this.layout.wrecks.map(() => false);
@@ -316,6 +333,7 @@ export class Game {
   private enterIntro(): void {
     this.state = 'intro';
     this.stateT = 0;
+    this.screens.hideAll();
     this.hud.setVisible(false);
     this.hud.fade(0, false, 0.8);
     this.screens.showSkip(true);
@@ -465,7 +483,7 @@ export class Game {
       const id = p.carrying;
       p.setCarry(null);
       this.partState[id] = 'dropped';
-      this.droppedPart = { x: p.x, z: p.z, id };
+      this.partSpots[id] = { x: p.x, z: p.z };
       const po = this.partObjects.find((q) => q.id === id)!;
       po.group.visible = true;
       po.group.position.set(p.x, this.terrain.heightAt(p.x, p.z), p.z);
@@ -505,7 +523,9 @@ export class Game {
   private gameOver(reason: string): void {
     this.state = 'gameover';
     this.endT = 0;
+    this.endShown = false;
     this.endReason = reason;
+    this.structures.cancel();
     this.setMusic('gameover');
     audio.play('defeat');
     this.stopLoops();
@@ -531,9 +551,7 @@ export class Game {
     this.pickups.burst('health', e.x, e.z, 4, e.y + 3);
     // the reactor core drops where she fell
     const po = this.partObjects.find((q) => q.id === 'reactor')!;
-    const rp = this.layout.parts.find((q) => q.id === 'reactor')!;
-    rp.x = e.x;
-    rp.z = e.z;
+    this.partSpots.reactor = { x: e.x, z: e.z };
     po.group.position.set(e.x, this.terrain.heightAt(e.x, e.z), e.z);
     po.group.visible = true;
     this.messages.announce('MATRIARCH SLAIN', 'The reactor core is exposed', 'good', 4);
@@ -543,7 +561,6 @@ export class Game {
 
   private pickUpPart(id: PartId): void {
     this.partState[id] = 'carried';
-    if (this.droppedPart?.id === id) this.droppedPart = null;
     this.player.setCarry(id);
     const po = this.partObjects.find((q) => q.id === id)!;
     po.group.visible = false;
@@ -665,7 +682,11 @@ export class Game {
         this.updatePlaying(dt);
         break;
       case 'paused':
-        if (inp.pressed('pause')) this.setPaused(false);
+        if (inp.pressed('pause')) {
+          // Esc backs out of the settings panel first instead of resuming underneath it
+          if (this.screens.settingsOpen) this.screens.closeSettings();
+          else this.setPaused(false);
+        }
         break;
       case 'fabricator':
         if (inp.pressed('interact') || inp.pressed('cancel')) this.closeFabricator();
@@ -875,7 +896,7 @@ export class Game {
         const st = this.partState[part.id];
         if (st !== 'field' && st !== 'dropped') continue;
         if (part.id === 'reactor' && st === 'field' && (this.enemies.boss || !this.partObjects.find((q) => q.id === 'reactor')!.group.visible)) continue;
-        const pos = st === 'dropped' && this.droppedPart ? this.droppedPart : part;
+        const pos = this.partSpots[part.id];
         if (!p.carrying && dist(p.x, p.z, pos.x, pos.z) < 2.2) this.pickUpPart(part.id);
       }
       if (p.carrying && shipD < SHIP.interactRadius + 1.5) this.installPart(p.carrying);
@@ -965,7 +986,8 @@ export class Game {
     rig.targetDistance = 20;
     audio.setMuffled(0.5);
     this.hud.update(dt);
-    if (this.endT > 2.8 && !document.getElementById('end')!.classList.contains('show')) {
+    if (this.endT > 2.8 && !this.endShown) {
+      this.endShown = true;
       this.hud.setVisible(false);
       this.screens.showEnd(false, this.endReason);
     }
@@ -975,6 +997,7 @@ export class Game {
     this.state = 'outro';
     this.stateT = 0;
     this.launching = false;
+    this.structures.cancel();
     this.player.model.root.visible = false;
     this.player.alive = false;
     this.hud.setVisible(false);
