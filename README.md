@@ -58,22 +58,25 @@ If you die, any part you were carrying drops where you fell, and WREN rebuilds y
 
 ## The world
 
-<img src="docs/map.jpg" alt="The in-game map: the grey crash site in the middle, ringed by the Rust Flats, with the Acid Marsh, Crystal Barrens, Fungal Deep and the Hive beyond" width="300" align="right">
-
 Kessra has six biomes, spreading out from the crash site:
 
-| Biome | What's out there |
-| --- | --- |
-| **Ashfall Plain** | The crash site: your ship, its air field and the fabricator |
-| **Rust Flats** | Rocks, ore, wrecks and erupting geysers |
-| **Acid Marsh** | Acid pools and nests. The **Thruster Coil** |
-| **Crystal Barrens** | Crystal spires, geysers and the richest xenite. The **Fuel Cell** |
-| **Fungal Deep** | Giant glowing mushrooms. The **Navigation Core** |
-| **The Hive** | Nests everywhere. The **Reactor Core**, guarded by **the Matriarch** |
+<table>
+<tr>
+<td width="56%">
+
+- **Ashfall Plain**: the crash site, with your ship, its air field and the fabricator
+- **Rust Flats**: rocks, ore, wrecks and erupting geysers
+- **Acid Marsh**: acid pools, nests and the **Thruster Coil**
+- **Crystal Barrens**: crystal spires, geysers, the richest xenite and the **Fuel Cell**
+- **Fungal Deep**: giant glowing mushrooms and the **Navigation Core**
+- **The Hive**: nests everywhere, and the **Reactor Core**, guarded by **the Matriarch**
+
+</td>
+<td width="44%"><img src="docs/map.jpg" alt="The in-game map: the grey crash site in the middle, ringed by the Rust Flats, with the Acid Marsh, Crystal Barrens, Fungal Deep and the Hive beyond" width="100%"></td>
+</tr>
+</table>
 
 The ground is dangerous too. Acid pools burn. Geysers rumble and ring the ground a moment before they erupt, and the blast hurts creatures as well as you. Drifters burst into choking spore clouds. Ion storms roll in with lightning strikes, each marked on the ground a moment before it lands.
-
-<br clear="right">
 
 ## Bestiary
 
@@ -103,17 +106,13 @@ The ship fights back with a point-defence auto-cannon, and it repairs its own hu
 
 ## The fabricator
 
-Spend xenite at the ship's hatch, plus scrap for ship upgrades. There are fifteen upgrades across three racks:
+Spend xenite at the ship's hatch, and scrap for ship upgrades and hull repairs. Fifteen upgrades across three racks:
 
-| Blaster | Suit | Ship |
-| --- | --- | --- |
-| Plasma Amplifier: damage | Armour Weave: max integrity | Hull Plating: hull strength |
-| Cyclic Accelerator: fire rate | O₂ Reserve: air capacity | Point Defence: auto-cannon output |
-| Cryo Heat Sink: less heat, faster cooling | Servo Legs: movement speed | |
-| Splitter Lens: extra bolts per shot | Thruster Pack: dash recharge | |
-| Phase Rounds: bolts pierce creatures | Salvage Magnet: pickup range | |
-| Ordnance Rack: secondary cooldown and power | Photon Lamp: your lamp slows and burns creatures | |
-| | Med Nanites: regenerate out of combat | |
+| Rack | Upgrades |
+| --- | --- |
+| **Blaster** | Plasma Amplifier (damage) · Cyclic Accelerator (fire rate) · Cryo Heat Sink (less heat, faster cooling) · Splitter Lens (extra bolts per shot) · Phase Rounds (bolts pierce creatures) · Ordnance Rack (secondary cooldown and power) |
+| **Suit** | Armour Weave (max integrity) · O₂ Reserve (air capacity) · Servo Legs (movement speed) · Thruster Pack (dash recharge) · Salvage Magnet (pickup range) · Photon Lamp (your lamp slows and burns creatures) · Med Nanites (regenerate out of combat) |
+| **Ship** | Hull Plating (hull strength) · Point Defence (auto-cannon output) |
 
 Your secondary weapon fires with the right mouse button. You start with the **Plasma Grenade**, a lobbed charge that blasts everything at the cursor. Two more are blueprints hidden in the survey logs:
 
