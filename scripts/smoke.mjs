@@ -367,6 +367,149 @@ for (const sc of scenarios) {
     await ev(() => (window.__game.input.mouseDown = false));
     continue;
   }
+  if (sc === 'reel') {
+    // frames for the README gameplay animation (screenshots/reel/): a staged night siege at a fixed timestep
+    const frames = Number(process.env.REEL_FRAMES ?? 105);
+    const fps = Number(process.env.REEL_FPS ?? 15);
+    mkdirSync('screenshots/reel', { recursive: true });
+    await ensureRun();
+    await ev(() => {
+      const g = window.__game;
+      g.hints.enabled = false;
+      g.hints.reset();
+      g.messages.clear();
+      g.renderer.rig.shakeEnabled = false;
+      g.inventory.scrap = 999;
+      g.inventory.xenite = 999;
+      for (const id of ['multi', 'cool', 'cool', 'cool']) g.buyUpgrade(id);
+      g.inventory.scrap = 64;
+      g.inventory.xenite = 23;
+      g.unlockedSecondaries.add('seeker');
+      g.secondary = 'seeker';
+      g.player.hp = 1e6;
+      g.ship.hull = 1e7;
+      const px = g.ship.x + 12;
+      const pz = g.ship.z + 6;
+      g.player.x = px;
+      g.player.z = pz;
+      g.structures.place('turret', px + 3, pz - 3.5, 0, true);
+      g.structures.place('turret', px + 3, pz + 3.5, 0, true);
+      g.structures.place('lamp', px + 6.5, pz - 1, 0, true);
+      g.structures.place('lamp', px + 4, pz + 9, 0, true);
+      g.structures.place('tesla', px + 1, pz + 7, 0, true);
+      g.structures.place('tesla', px + 2, pz - 8, 0, true);
+      for (let i = 0; i < 3; i++) g.structures.place('wall', px + 10, pz - 2.2 + i * 2.2, Math.PI, true);
+      g.cycle.set('night', 30);
+      g.renderer.rig.target.set(px, g.terrain.heightAt(px, pz), pz);
+      g.renderer.rig.snap();
+    });
+    // spawn creatures in an arc to the player's right (angles in radians around +X); tougher than usual so
+    // the fight reaches the barricades instead of ending at the edge of the screen
+    const spawn = (kinds, r0, r1, spread = 1.2, opts = {}) =>
+      ev(
+        ([kinds, r0, r1, spread, opts]) => {
+          const g = window.__game;
+          let n = 0;
+          for (let i = 0; n < kinds.length && i < 300; i++) {
+            const a = (Math.random() * 2 - 1) * spread;
+            const r = r0 + Math.random() * (r1 - r0);
+            const x = g.player.x + Math.cos(a) * r;
+            const z = g.player.z + Math.sin(a) * r;
+            if (g.flowShip.blocked[g.flowShip.idx(x, z)]) continue;
+            const kind = kinds[n++];
+            const e = g.enemies.spawn(kind, x, z, 'hunt', { night: true, aggro: true, emerge: !!opts.emerge, elite: kind === 'brute' });
+            e.hp *= 1.6;
+            e.maxHp *= 1.6;
+          }
+        },
+        [kinds, r0, r1, spread, opts],
+      );
+    // move the cursor toward the nearest visible creature, the way a player tracks targets
+    const aim = () =>
+      ev(() => {
+        const g = window.__game;
+        const p = g.player;
+        let best = null;
+        let bd = 24;
+        for (const e of g.enemies.list) {
+          if (!e.alive || e.kind === 'nest' || e.kind === 'burrower') continue;
+          const d = Math.hypot(e.x - p.x, e.z - p.z);
+          if (d < bd) {
+            bd = d;
+            best = e;
+          }
+        }
+        if (!best) return;
+        const v = g.renderer.rig.target.clone().set(best.x, best.y + 0.6, best.z).project(g.renderer.rig.camera);
+        const tx = ((v.x + 1) / 2) * innerWidth;
+        const ty = ((1 - v.y) / 2) * innerHeight;
+        g.input.mouseX += (tx - g.input.mouseX) * 0.5;
+        g.input.mouseY += (ty - g.input.mouseY) * 0.5;
+      });
+    const S = 'skitter';
+    await step(1);
+    await spawn([S, S, 'spitter', S, S, S, 'floater', S, S, S, 'brute', S, S, 'spitter', S, S], 16, 26);
+    await ev(() => {
+      const g = window.__game;
+      g.input.mouseX = innerWidth * 0.72;
+      g.input.mouseY = innerHeight * 0.47;
+      g.input.mouseDown = true;
+    });
+    await step(1.2);
+    const E = { emerge: true };
+    const waves = {
+      0: [[S, S, S, S, 'spitter', S], 18, 26],
+      8: [[S, S, S, S], 9, 15, 1.3, E],
+      16: [['brute', S, S, S, 'floater'], 18, 24, 0.5],
+      26: [[S, S, S, 'spitter', S, S, S], 16, 26],
+      34: [['burrower', S, S, S, S], 8, 14, 1.2, E],
+      44: [[S, S, S, S, 'spitter', 'floater', S], 16, 26],
+      54: [['brute', S, S, S, S], 17, 24, 0.7],
+      62: [[S, S, S, S, S], 9, 15, 1.3, E],
+      72: [[S, S, S, 'spitter', S, 'floater', S], 16, 26],
+      82: [[S, S, S, S, S, 'spitter'], 10, 20, 1.2, E],
+      90: [['brute', S, S, S, S, S], 16, 24, 0.9],
+    };
+    const dry = !!process.env.REEL_DRY;
+    for (let f = 0; f < frames; f++) {
+      if (waves[f]) await spawn(...waves[f]);
+      if (f === 20 || f === 66)
+        await ev(() => {
+          const g = window.__game;
+          g.player.secondaryCd = 0;
+          g.input.rightPressed = true;
+        });
+      await aim();
+      await step(1 / fps);
+      await ev(() => (window.__game.player.hp = 1e6));
+      if (!dry) {
+        await shot(`reel/f${String(f).padStart(3, '0')}`);
+        continue;
+      }
+      // REEL_DRY=1: report how close the fight gets instead of rendering frames
+      if (f % 10 === 0)
+        console.log(
+          `f${f}`,
+          await ev(() => {
+            const g = window.__game;
+            const p = g.player;
+            let alive = 0;
+            let onScreen = 0;
+            let near = 0;
+            for (const e of g.enemies.list) {
+              if (!e.alive) continue;
+              alive++;
+              const v = g.renderer.rig.target.clone().set(e.x, e.y, e.z).project(g.renderer.rig.camera);
+              if (Math.abs(v.x) < 1 && Math.abs(v.y) < 1) onScreen++;
+              if (Math.hypot(e.x - p.x, e.z - p.z) < 12) near++;
+            }
+            return `alive:${alive} onScreen:${onScreen} within12m:${near} kills:${g.record.kills}`;
+          }),
+        );
+    }
+    await ev(() => (window.__game.input.mouseDown = false));
+    continue;
+  }
   if (sc === 'boss') {
     await ensureRun();
     const a = await ev(() => {
